@@ -1,0 +1,16 @@
+[package]
+name = "egui-viscanvas"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+egui = "0.26"
+egui_extras = { version = "0.26", features = ["image", "svg"] }
+thiserror = "1.0"
+log = "0.4"
+
+[dev-dependencies]
+eframe = "0.26.2"
+egui_storybook = { path = "../egui-storybook" }
