@@ -3,9 +3,10 @@ pub mod error;
 use crate::error::{Result, VisCanvasError};
 use egui::load::{ImageLoader, TexturePoll};
 use egui::style::default_text_styles;
+use egui::FontId;
 use egui::{
-    Color32, Context, Id, ImageData, ImageSource, Layout, Painter, PointerButton, Pos2, Rect,
-    Response, Rounding, Sense, SizeHint, Stroke, TextureId, TextureOptions, Ui, Vec2,
+    Align2, Color32, Context, Id, ImageData, ImageSource, Layout, Painter, PointerButton, Pos2,
+    Rect, Response, Rounding, Sense, SizeHint, Stroke, TextureId, TextureOptions, Ui, Vec2,
 };
 
 const SCROLL_SPEED: f32 = 1.0;
@@ -37,8 +38,8 @@ pub struct Rectangle {
     pub y: f32,
     pub width: f32,
     pub height: f32,
-    pub fill_color: Option<egui::Color32>,
-    pub stroke_color: Option<egui::Color32>,
+    pub fill_color: Option<Color32>,
+    pub stroke_color: Option<Color32>,
     pub stroke_thickness: f32,
     pub filled: bool,
     pub label: Option<String>,
@@ -83,6 +84,11 @@ impl Rectangle {
         self
     }
 
+    pub fn with_label(mut self, label: impl ToString) -> Self {
+        self.label = Some(label.to_string());
+        self
+    }
+
     pub fn show(
         &self,
         ui: &mut Ui,
@@ -97,18 +103,29 @@ impl Rectangle {
                     * canvas_state.current_scale
                     + canvas_state.shift),
         );
-        dbg!(
-            &rect,
-            &self.fill_color,
-            &self.stroke_color,
-            &self.stroke_thickness
-        );
         painter.rect(
             rect,
             Rounding::default(),
             self.fill_color.unwrap_or_default(),
             Stroke::new(self.stroke_thickness, self.stroke_color.unwrap_or_default()),
         );
+        if let Some(label) = &self.label {
+            let text_rect = painter.text(
+                rect.left_top(),
+                Align2::LEFT_BOTTOM,
+                label.as_str(),
+                FontId::default(),
+                Color32::BLACK,
+            );
+            painter.rect_filled(text_rect, 0.0, self.stroke_color.unwrap_or_default());
+            let _text_rect = painter.text(
+                rect.left_top(),
+                Align2::LEFT_BOTTOM,
+                label.as_str(),
+                FontId::default(),
+                Color32::BLACK,
+            );
+        }
 
         // TODO: non fill response
         // TODO: drag response
