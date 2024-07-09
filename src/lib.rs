@@ -1,11 +1,11 @@
 pub mod error;
 
 use crate::error::{Result, VisCanvasError};
-use egui::load::{ImageLoader, TexturePoll};
-use egui::style::default_text_styles;
+use egui::load::TexturePoll;
+use egui::FontId;
 use egui::{
-    Color32, Context, Id, ImageData, ImageSource, Layout, Painter, PointerButton, Pos2, Rect,
-    Response, Rounding, Sense, SizeHint, Stroke, TextureId, TextureOptions, Ui, Vec2,
+    Align2, Color32, Context, Id, ImageSource, Painter, PointerButton, Pos2, Rect, Response,
+    Rounding, Sense, SizeHint, Stroke, TextureOptions, Ui, Vec2,
 };
 
 const SCROLL_SPEED: f32 = 1.0;
@@ -22,12 +22,124 @@ pub enum Thickness {
 pub enum Content {
     Image(Image),
     Rectangle(Rectangle),
-    Segment,
+    Segment(Segment),
+    PiecewiseSegment(PiecewiseSegment),
 }
 
 impl From<Rectangle> for Content {
     fn from(rect: Rectangle) -> Self {
         Content::Rectangle(rect)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SegmentData {
+    pub start: Pos2,
+    pub end: Pos2,
+}
+
+#[derive(Debug, Clone)]
+pub struct Segment {
+    pub data: SegmentData,
+    pub stroke: Stroke,
+}
+
+impl Segment {
+    pub fn new(start: Pos2, end: Pos2) -> Self {
+        Self {
+            data: SegmentData { start, end },
+            stroke: Stroke::new(1.0, Color32::BLACK),
+        }
+    }
+
+    pub fn with_stroke_color(mut self, color: Color32) -> Self {
+        self.stroke.color = color;
+        self
+    }
+
+    pub fn with_stroke_thickness(mut self, thickness: f32) -> Self {
+        self.stroke.width = thickness;
+        self
+    }
+
+    pub fn show(
+        &self,
+        _ui: &mut Ui,
+        painter: &mut Painter,
+        canvas_state: &VisCanvasStateInner,
+    ) -> Result<Option<Response>> {
+        let start = painter.clip_rect().min
+            + (self.data.start * canvas_state.current_scale + canvas_state.shift).to_vec2();
+        let end = painter.clip_rect().min
+            + (self.data.end * canvas_state.current_scale + canvas_state.shift).to_vec2();
+
+        painter.line_segment([start, end], self.stroke);
+        Ok(None)
+    }
+}
+
+impl From<Segment> for Content {
+    fn from(segment: Segment) -> Self {
+        Content::Segment(segment)
+    }
+}
+
+pub struct PiecewiseSegment {
+    pub data: Vec<SegmentData>,
+    pub stroke: Stroke,
+}
+
+impl PiecewiseSegment {
+    pub fn show(
+        &self,
+        _ui: &mut Ui,
+        painter: &mut Painter,
+        canvas_state: &VisCanvasStateInner,
+    ) -> Result<Option<Response>> {
+        for segment_data in &self.data {
+            let start = painter.clip_rect().min
+                + (segment_data.start * canvas_state.current_scale + canvas_state.shift).to_vec2();
+            let end = painter.clip_rect().min
+                + (segment_data.end * canvas_state.current_scale + canvas_state.shift).to_vec2();
+
+            painter.line_segment([start, end], self.stroke);
+        }
+        Ok(None)
+    }
+
+    pub fn new(points: Vec<Pos2>) -> Option<Self> {
+        if points.len() < 2 {
+            return None;
+        }
+
+        let mut data = Vec::new();
+        for i in 0..points.len() - 1 {
+            data.push(SegmentData {
+                start: points[i],
+                end: points[i + 1],
+            });
+        }
+
+        Some(Self {
+            data,
+            stroke: Stroke::new(1.0, Color32::BLACK),
+        })
+    }
+
+    pub fn with_stroke_color(mut self, color: Color32) -> Self {
+        self.stroke.color = color;
+        self
+    }
+
+    pub fn with_stroke_thickness(mut self, thickness: f32) -> Self {
+        self.stroke.width = thickness;
+        self
+    }
+}
+
+impl From<PiecewiseSegment> for Content {
+    fn from(piecewise_segment: PiecewiseSegment) -> Self {
+        Content::PiecewiseSegment(piecewise_segment)
     }
 }
 
@@ -37,10 +149,8 @@ pub struct Rectangle {
     pub y: f32,
     pub width: f32,
     pub height: f32,
-    pub fill_color: Option<egui::Color32>,
-    pub stroke_color: Option<egui::Color32>,
-    pub stroke_thickness: f32,
-    pub filled: bool,
+    pub fill_color: Option<Color32>,
+    pub stroke: Option<Stroke>,
     pub label: Option<String>,
 }
 
@@ -63,23 +173,37 @@ impl Rectangle {
         self
     }
 
-    pub fn with_fill_color(mut self, fill_color: egui::Color32) -> Self {
+    pub fn with_fill_color(mut self, fill_color: Color32) -> Self {
         self.fill_color = Some(fill_color);
         self
     }
 
-    pub fn with_stroke_color(mut self, stroke_color: egui::Color32) -> Self {
-        self.stroke_color = Some(stroke_color);
+    pub fn with_stroke_color(mut self, stroke_color: Color32) -> Self {
+        if let Some(stroke) = &mut self.stroke {
+            stroke.color = stroke_color;
+        } else {
+            self.stroke = Some(Stroke::new(1.0, stroke_color));
+        }
         self
     }
 
     pub fn with_stroke_thickness(mut self, stroke_thickness: f32) -> Self {
-        self.stroke_thickness = stroke_thickness;
+        if let Some(stroke) = &mut self.stroke {
+            stroke.width = stroke_thickness;
+        } else {
+            self.stroke = Some(Stroke::new(stroke_thickness, Color32::BLACK));
+        }
         self
     }
 
-    pub fn with_filled(mut self, filled: bool) -> Self {
-        self.filled = filled;
+    pub fn with_filled(mut self, fill: Color32) -> Self {
+        self.fill_color = Some(fill);
+
+        self
+    }
+
+    pub fn with_label(mut self, label: impl ToString) -> Self {
+        self.label = Some(label.to_string());
         self
     }
 
@@ -97,18 +221,36 @@ impl Rectangle {
                     * canvas_state.current_scale
                     + canvas_state.shift),
         );
-        dbg!(
-            &rect,
-            &self.fill_color,
-            &self.stroke_color,
-            &self.stroke_thickness
-        );
+
         painter.rect(
             rect,
             Rounding::default(),
             self.fill_color.unwrap_or_default(),
-            Stroke::new(self.stroke_thickness, self.stroke_color.unwrap_or_default()),
+            if let Some(stroke) = &self.stroke {
+                *stroke
+            } else {
+                Stroke::new(0.0, Color32::BLACK)
+            },
         );
+        if let Some(label) = &self.label {
+            let text_rect = painter.text(
+                rect.left_top(),
+                Align2::LEFT_BOTTOM,
+                label.as_str(),
+                FontId::default(),
+                Color32::BLACK,
+            );
+            if let Some(fill_color) = self.fill_color {
+                painter.rect_filled(text_rect, 0.0, fill_color);
+            }
+            let _text_rect = painter.text(
+                rect.left_top(),
+                Align2::LEFT_BOTTOM,
+                label.as_str(),
+                FontId::default(),
+                Color32::BLACK,
+            );
+        }
 
         // TODO: non fill response
         // TODO: drag response
@@ -175,7 +317,7 @@ pub struct VisCanvasState {
 }
 
 #[derive(Debug, Clone)]
-struct VisCanvasStateInner {
+pub struct VisCanvasStateInner {
     current_scale: f32,
     shift: Vec2,
 }
@@ -219,14 +361,19 @@ impl VisCanvasState {
                         Content::Image(image) => {
                             image.show(ui, &mut painter, &self.inner_state)?;
                         }
-                        _ => {}
+                        Content::Segment(segment) => {
+                            segment.show(ui, &mut painter, &self.inner_state)?;
+                        }
+                        Content::PiecewiseSegment(piecewise_segment) => {
+                            piecewise_segment.show(ui, &mut painter, &self.inner_state)?;
+                        }
                     }
                 }
                 Ok::<Response, VisCanvasError>(response)
             })
             .inner?;
 
-        let mut state = &mut self.inner_state;
+        let state = &mut self.inner_state;
         if response.dragged_by(PointerButton::Middle) {
             state.shift += response.drag_delta();
         }
