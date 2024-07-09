@@ -1,12 +1,11 @@
 pub mod error;
 
 use crate::error::{Result, VisCanvasError};
-use egui::load::{ImageLoader, TexturePoll};
-use egui::style::default_text_styles;
+use egui::load::TexturePoll;
 use egui::FontId;
 use egui::{
-    Align2, Color32, Context, Id, ImageData, ImageSource, Layout, Painter, PointerButton, Pos2,
-    Rect, Response, Rounding, Sense, SizeHint, Stroke, TextureId, TextureOptions, Ui, Vec2,
+    Align2, Color32, Context, Id, ImageSource, Painter, PointerButton, Pos2, Rect, Response,
+    Rounding, Sense, SizeHint, Stroke, TextureOptions, Ui, Vec2,
 };
 
 const SCROLL_SPEED: f32 = 1.0;
@@ -65,7 +64,7 @@ impl Segment {
 
     pub fn show(
         &self,
-        ui: &mut Ui,
+        _ui: &mut Ui,
         painter: &mut Painter,
         canvas_state: &VisCanvasStateInner,
     ) -> Result<Option<Response>> {
@@ -93,7 +92,7 @@ pub struct PiecewiseSegment {
 impl PiecewiseSegment {
     pub fn show(
         &self,
-        ui: &mut Ui,
+        _ui: &mut Ui,
         painter: &mut Painter,
         canvas_state: &VisCanvasStateInner,
     ) -> Result<Option<Response>> {
@@ -228,7 +227,7 @@ impl Rectangle {
             Rounding::default(),
             self.fill_color.unwrap_or_default(),
             if let Some(stroke) = &self.stroke {
-                stroke.clone()
+                *stroke
             } else {
                 Stroke::new(0.0, Color32::BLACK)
             },
@@ -318,7 +317,7 @@ pub struct VisCanvasState {
 }
 
 #[derive(Debug, Clone)]
-struct VisCanvasStateInner {
+pub struct VisCanvasStateInner {
     current_scale: f32,
     shift: Vec2,
 }
@@ -374,7 +373,7 @@ impl VisCanvasState {
             })
             .inner?;
 
-        let mut state = &mut self.inner_state;
+        let state = &mut self.inner_state;
         if response.dragged_by(PointerButton::Middle) {
             state.shift += response.drag_delta();
         }

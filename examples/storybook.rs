@@ -1,5 +1,4 @@
 use eframe::NativeOptions;
-use egui::ImageSource;
 use egui_storybook::story_book::{Story, StoryBookBuilder};
 use egui_storybook::{run_story_book, story_body};
 
