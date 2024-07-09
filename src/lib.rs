@@ -97,7 +97,50 @@ impl PiecewiseSegment {
         painter: &mut Painter,
         canvas_state: &VisCanvasStateInner,
     ) -> Result<Option<Response>> {
-        todo!()
+        for segment_data in &self.data {
+            let start = painter.clip_rect().min
+                + (segment_data.start * canvas_state.current_scale + canvas_state.shift).to_vec2();
+            let end = painter.clip_rect().min
+                + (segment_data.end * canvas_state.current_scale + canvas_state.shift).to_vec2();
+
+            painter.line_segment([start, end], self.stroke);
+        }
+        Ok(None)
+    }
+
+    pub fn new(points: Vec<Pos2>) -> Option<Self> {
+        if points.len() < 2 {
+            return None;
+        }
+
+        let mut data = Vec::new();
+        for i in 0..points.len() - 1 {
+            data.push(SegmentData {
+                start: points[i],
+                end: points[i + 1],
+            });
+        }
+
+        Some(Self {
+            data,
+            stroke: Stroke::new(1.0, Color32::BLACK),
+        })
+    }
+
+    pub fn with_stroke_color(mut self, color: Color32) -> Self {
+        self.stroke.color = color;
+        self
+    }
+
+    pub fn with_stroke_thickness(mut self, thickness: f32) -> Self {
+        self.stroke.width = thickness;
+        self
+    }
+}
+
+impl From<PiecewiseSegment> for Content {
+    fn from(piecewise_segment: PiecewiseSegment) -> Self {
+        Content::PiecewiseSegment(piecewise_segment)
     }
 }
 

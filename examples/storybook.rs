@@ -103,6 +103,14 @@ fn main() {
                             .with_size(egui::Vec2::new(256.0, 256.0))
                             .with_stroke_color(egui::Color32::from_rgb(155, 155, 0))
                             .with_stroke_thickness(2.0).into(),
+                        PiecewiseSegment::new(vec![
+                            egui::Pos2::new(0.0, 0.0),
+                            egui::Pos2::new(100.0, 100.0),
+                            egui::Pos2::new(200.0, 0.0),
+                            egui::Pos2::new(0.0, 300.0),
+                        ]).unwrap()
+                            .with_stroke_color(egui::Color32::from_rgb(155, 155, 255))
+                            .with_stroke_thickness(2.0).into(),
                     ];
 
                     egui::CentralPanel::default().show(ctx, |ui| {
