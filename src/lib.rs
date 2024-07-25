@@ -7,6 +7,7 @@ use egui::{
     Align2, Color32, Context, Id, ImageSource, Painter, PointerButton, Pos2, Rect, Response,
     Rounding, Sense, SizeHint, Stroke, TextureOptions, Ui, Vec2,
 };
+use num::Zero;
 
 const SCROLL_SPEED: f32 = 1.0;
 const ZOOM_SPEED: f32 = 1.0;
@@ -19,6 +20,7 @@ pub enum Thickness {
     Absolute(f32),
 }
 
+#[derive(Debug, Clone)]
 pub enum Content {
     Image(Image),
     Rectangle(Rectangle),
@@ -84,6 +86,7 @@ impl From<Segment> for Content {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct PiecewiseSegment {
     pub data: Vec<SegmentData>,
     pub stroke: Stroke,
@@ -304,11 +307,11 @@ impl Image {
     }
 }
 
-pub fn vis_canvas(ui: &mut Ui, id: Id, contents: &[Content]) -> Result<Response> {
+pub fn vis_canvas(ui: &mut Ui, id: Id, contents: &[Content]) -> Result<(Response, VisCanvasState)> {
     let mut state = VisCanvasState::load(ui.ctx(), id);
     let response = state.show_body(ui, contents)?;
     state.store(ui.ctx());
-    Ok(response)
+    Ok((response, state))
 }
 
 pub struct VisCanvasState {
@@ -332,7 +335,12 @@ impl Default for VisCanvasStateInner {
 }
 
 impl VisCanvasState {
-    pub fn load(ctx: &Context, id: Id) -> Self {
+    pub fn screen_to_canvas(&self, screen_pos: Pos2) -> Pos2 {
+        assert_ne!(self.inner_state.current_scale, f32::zero());
+        (screen_pos - self.inner_state.shift) / self.inner_state.current_scale
+    }
+
+    pub(crate) fn load(ctx: &Context, id: Id) -> Self {
         let inner_state = ctx.data_mut(|data| {
             data.get_persisted::<VisCanvasStateInner>(id)
                 .unwrap_or_default()
@@ -340,19 +348,19 @@ impl VisCanvasState {
         Self { id, inner_state }
     }
 
-    pub fn store(&self, ctx: &Context) {
+    pub(crate) fn store(&self, ctx: &Context) {
         ctx.data_mut(|data| {
             data.insert_persisted(self.id, self.inner_state.clone());
         });
     }
 
-    pub fn show_body(&mut self, ui: &mut Ui, contents: &[Content]) -> Result<Response> {
+    pub(crate) fn show_body(&mut self, ui: &mut Ui, contents: &[Content]) -> Result<Response> {
         let old_state = self.inner_state.clone();
 
         let response = ui
             .centered_and_justified(|ui| {
                 let (response, mut painter) =
-                    ui.allocate_painter(ui.available_size(), Sense::drag());
+                    ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
                 for content in contents {
                     match content {
                         Content::Rectangle(rect) => {

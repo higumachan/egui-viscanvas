@@ -10,6 +10,7 @@ egui = "0.28.1"
 egui_extras = { version = "0.28.1", features = ["image", "svg"] }
 thiserror = "1.0"
 log = "0.4"
+num = "0.4"
 
 [dev-dependencies]
 eframe = "0.28.1"
