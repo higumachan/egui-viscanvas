@@ -12,6 +12,12 @@ use num::Zero;
 const SCROLL_SPEED: f32 = 1.0;
 const ZOOM_SPEED: f32 = 1.0;
 
+#[derive(Debug, Clone, Copy)]
+pub enum Origin {
+    TopLeft,
+    BottomLeft,
+}
+
 #[derive(Debug, Clone)]
 pub enum Thickness {
     /// Relative to the canvas scale
@@ -71,9 +77,9 @@ impl Segment {
         canvas_state: &VisCanvasStateInner,
     ) -> Result<Option<Response>> {
         let start = painter.clip_rect().min
-            + (self.data.start * canvas_state.current_scale + canvas_state.shift).to_vec2();
+            + (self.data.start.to_vec2() * canvas_state.current_scale_vec() + canvas_state.shift);
         let end = painter.clip_rect().min
-            + (self.data.end * canvas_state.current_scale + canvas_state.shift).to_vec2();
+            + (self.data.end.to_vec2() * canvas_state.current_scale + canvas_state.shift);
 
         painter.line_segment([start, end], self.stroke);
         Ok(None)
@@ -101,9 +107,11 @@ impl PiecewiseSegment {
     ) -> Result<Option<Response>> {
         for segment_data in &self.data {
             let start = painter.clip_rect().min
-                + (segment_data.start * canvas_state.current_scale + canvas_state.shift).to_vec2();
+                + (segment_data.start.to_vec2() * canvas_state.current_scale_vec()
+                    + canvas_state.shift);
             let end = painter.clip_rect().min
-                + (segment_data.end * canvas_state.current_scale + canvas_state.shift).to_vec2();
+                + (segment_data.end.to_vec2() * canvas_state.current_scale_vec()
+                    + canvas_state.shift);
 
             painter.line_segment([start, end], self.stroke);
         }
@@ -216,12 +224,13 @@ impl Rectangle {
         painter: &mut Painter,
         canvas_state: &VisCanvasStateInner,
     ) -> Result<Option<Response>> {
-        let rect = Rect::from_min_max(
+        let rect = Rect::from_two_pos(
             painter.clip_rect().min
-                + (Vec2::new(self.x, self.y) * canvas_state.current_scale + canvas_state.shift),
+                + (Vec2::new(self.x, self.y) * canvas_state.current_scale_vec()
+                    + canvas_state.shift),
             painter.clip_rect().min
                 + (Vec2::new(self.x + self.width, self.y + self.height)
-                    * canvas_state.current_scale
+                    * canvas_state.current_scale_vec()
                     + canvas_state.shift),
         );
 
@@ -307,8 +316,13 @@ impl Image {
     }
 }
 
-pub fn vis_canvas(ui: &mut Ui, id: Id, contents: &[Content]) -> Result<(Response, VisCanvasState)> {
-    let mut state = VisCanvasState::load(ui.ctx(), id);
+pub fn vis_canvas(
+    ui: &mut Ui,
+    id: Id,
+    origin: Origin,
+    contents: &[Content],
+) -> Result<(Response, VisCanvasState)> {
+    let mut state = VisCanvasState::load(ui.ctx(), id, origin);
     let response = state.show_body(ui, contents)?;
     state.store(ui.ctx());
     Ok((response, state))
@@ -321,6 +335,7 @@ pub struct VisCanvasState {
 
 #[derive(Debug, Clone)]
 pub struct VisCanvasStateInner {
+    origin: Origin,
     current_scale: f32,
     shift: Vec2,
 }
@@ -330,6 +345,7 @@ impl Default for VisCanvasStateInner {
         Self {
             current_scale: 1.0,
             shift: Vec2::ZERO,
+            origin: Origin::TopLeft,
         }
     }
 }
@@ -337,13 +353,17 @@ impl Default for VisCanvasStateInner {
 impl VisCanvasState {
     pub fn screen_to_canvas(&self, screen_pos: Pos2) -> Pos2 {
         assert_ne!(self.inner_state.current_scale, f32::zero());
-        (screen_pos - self.inner_state.shift) / self.inner_state.current_scale
+        ((screen_pos - self.inner_state.shift).to_vec2() / self.inner_state.current_scale_vec())
+            .to_pos2()
     }
 
-    pub(crate) fn load(ctx: &Context, id: Id) -> Self {
+    pub(crate) fn load(ctx: &Context, id: Id, origin: Origin) -> Self {
         let inner_state = ctx.data_mut(|data| {
-            data.get_persisted::<VisCanvasStateInner>(id)
-                .unwrap_or_default()
+            let mut inner = data
+                .get_persisted::<VisCanvasStateInner>(id)
+                .unwrap_or_default();
+            inner.origin = origin;
+            inner
         });
         Self { id, inner_state }
     }
@@ -416,6 +436,13 @@ impl VisCanvasState {
 }
 
 impl VisCanvasStateInner {
+    pub fn current_scale_vec(&self) -> Vec2 {
+        match self.origin {
+            Origin::TopLeft => Vec2::new(self.current_scale, self.current_scale),
+            Origin::BottomLeft => Vec2::new(self.current_scale, -self.current_scale),
+        }
+    }
+
     fn is_valid(&self) -> bool {
         0.0 <= self.current_scale
             && self.current_scale <= 10.0
