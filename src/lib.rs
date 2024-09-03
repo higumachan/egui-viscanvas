@@ -264,6 +264,7 @@ impl Rectangle {
 #[derive(Debug, Clone)]
 pub struct Image {
     image_source: ImageSource<'static>,
+    brighten: i16,
 }
 
 impl From<Image> for Content {
@@ -273,8 +274,11 @@ impl From<Image> for Content {
 }
 
 impl Image {
-    pub fn new(image_source: ImageSource<'static>) -> Self {
-        Self { image_source }
+    pub fn new(image_source: ImageSource<'static>, brighten: i16) -> Self {
+        Self {
+            image_source,
+            brighten,
+        }
     }
 
     pub fn show(
@@ -283,11 +287,13 @@ impl Image {
         painter: &mut Painter,
         canvas_state: &VisCanvasStateInner,
     ) -> Result<Option<Response>> {
-        let texture = self.image_source.clone().load(
-            ui.ctx(),
-            TextureOptions::default(),
-            SizeHint::Scale(1.0.into()),
-        )?;
+        let mut option = TextureOptions::default();
+        option.brighten = self.brighten;
+
+        let texture =
+            self.image_source
+                .clone()
+                .load(ui.ctx(), option, SizeHint::Scale(1.0.into()))?;
 
         if let TexturePoll::Ready { texture } = texture {
             painter.image(

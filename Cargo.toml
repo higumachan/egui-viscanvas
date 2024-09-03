@@ -6,12 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-egui = "0.28.1"
-egui_extras = { version = "0.28.1", features = ["image", "svg"] }
+egui = { git = "https://github.com/higumachan/egui.git", branch = "image-processing-loader2" }
+egui_extras = { git = "https://github.com/higumachan/egui.git", branch = "image-processing-loader2" }
 thiserror = "1.0"
 log = "0.4"
 num = "0.4"
 
 [dev-dependencies]
-eframe = "0.28.1"
+eframe = { git = "https://github.com/higumachan/egui.git", branch = "image-processing-loader2" }
 egui_storybook = { path = "../egui-storybook" }
