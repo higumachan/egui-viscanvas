@@ -163,6 +163,7 @@ pub struct Rectangle {
     pub fill_color: Option<Color32>,
     pub stroke: Option<Stroke>,
     pub label: Option<String>,
+    pub responsable: bool,
 }
 
 impl Rectangle {
@@ -218,6 +219,11 @@ impl Rectangle {
         self
     }
 
+    pub fn with_responsable(mut self, responsable: bool) -> Self {
+        self.responsable = responsable;
+        self
+    }
+
     pub fn show(
         &self,
         ui: &mut Ui,
@@ -264,9 +270,11 @@ impl Rectangle {
             );
         }
 
-        // TODO: non fill response
-        // TODO: drag response
-        Ok(Some(ui.allocate_rect(rect, Sense::click())))
+        if self.responsable {
+            Ok(Some(ui.allocate_rect(rect, Sense::click())))
+        } else {
+            Ok(None)
+        }
     }
 }
 
