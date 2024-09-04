@@ -1,12 +1,13 @@
 pub mod error;
 
 use crate::error::{Result, VisCanvasError};
+use egui::epaint::PathShape;
 use egui::load::TexturePoll;
-use egui::FontId;
 use egui::{
     Align2, Color32, Context, Id, ImageSource, Painter, PointerButton, Pos2, Rect, Response,
     Rounding, Sense, SizeHint, Stroke, TextureOptions, Ui, Vec2,
 };
+use egui::{FontId, Shape};
 use num::Zero;
 
 const SCROLL_SPEED: f32 = 1.0;
@@ -30,6 +31,7 @@ pub enum Thickness {
 pub enum Content {
     Image(Image),
     Rectangle(Rectangle),
+    Circle(Circle),
     Segment(Segment),
     PiecewiseSegment(PiecewiseSegment),
 }
@@ -46,10 +48,47 @@ pub struct SegmentData {
     pub end: Pos2,
 }
 
+#[derive(Debug, Clone, Default, Copy)]
+pub enum SegmentAccent {
+    #[default]
+    None,
+    Arrow,
+}
+
 #[derive(Debug, Clone)]
 pub struct Segment {
     pub data: SegmentData,
     pub stroke: Stroke,
+    pub accents: (SegmentAccent, SegmentAccent),
+}
+
+fn arrow_head_shape(
+    point: Pos2,
+    back_vector: Vec2,
+    thickness: f32,
+    fill_color: Color32,
+) -> (Shape, Vec2) {
+    let v = back_vector.normalized();
+    let v1 = Vec2::new(
+        v.x * f32::cos(std::f32::consts::FRAC_PI_4) - v.y * f32::sin(std::f32::consts::FRAC_PI_4),
+        v.x * f32::sin(std::f32::consts::FRAC_PI_4) + v.y * f32::cos(std::f32::consts::FRAC_PI_4),
+    );
+    let p1 = point + (v1 * 5.0 * thickness);
+    // rotate -45 degree
+    let v2 = Vec2::new(
+        v.x * f32::cos(-std::f32::consts::FRAC_PI_4) - v.y * f32::sin(-std::f32::consts::FRAC_PI_4),
+        v.x * f32::sin(-std::f32::consts::FRAC_PI_4) + v.y * f32::cos(-std::f32::consts::FRAC_PI_4),
+    );
+    let p2 = point + (v2 * 5.0 * thickness);
+
+    (
+        Shape::Path(PathShape::convex_polygon(
+            vec![point, p2, p1],
+            fill_color,
+            Stroke::new(0.0, Color32::default()),
+        )),
+        v * 3.0 * thickness,
+    )
 }
 
 impl Segment {
@@ -57,6 +96,7 @@ impl Segment {
         Self {
             data: SegmentData { start, end },
             stroke: Stroke::new(1.0, Color32::BLACK),
+            accents: (SegmentAccent::None, SegmentAccent::None),
         }
     }
 
@@ -70,18 +110,57 @@ impl Segment {
         self
     }
 
+    pub fn with_start_accent(mut self, accent: SegmentAccent) -> Self {
+        self.accents.0 = accent;
+        self
+    }
+
+    pub fn with_end_accent(mut self, accent: SegmentAccent) -> Self {
+        self.accents.1 = accent;
+        self
+    }
+
     pub fn show(
         &self,
         _ui: &mut Ui,
         painter: &mut Painter,
         canvas_state: &VisCanvasStateInner,
     ) -> Result<Option<Response>> {
-        let start = painter.clip_rect().min
+        let mut start = painter.clip_rect().min
             + (self.data.start.to_vec2() * canvas_state.current_scale_vec() + canvas_state.shift);
-        let end = painter.clip_rect().min
-            + (self.data.end.to_vec2() * canvas_state.current_scale + canvas_state.shift);
+        let mut end = painter.clip_rect().min
+            + (self.data.end.to_vec2() * canvas_state.current_scale_vec() + canvas_state.shift);
+
+        match self.accents.0 {
+            SegmentAccent::Arrow => {
+                let (shape, arrow_offset) = arrow_head_shape(
+                    start,
+                    (end - start).normalized(),
+                    self.stroke.width,
+                    self.stroke.color,
+                );
+                painter.add(shape);
+                start += arrow_offset;
+            }
+            SegmentAccent::None => {}
+        }
+
+        match self.accents.1 {
+            SegmentAccent::Arrow => {
+                let (shape, arrow_offset) = arrow_head_shape(
+                    end,
+                    (start - end).normalized(),
+                    self.stroke.width,
+                    self.stroke.color,
+                );
+                painter.add(shape);
+                end += arrow_offset;
+            }
+            SegmentAccent::None => {}
+        }
 
         painter.line_segment([start, end], self.stroke);
+
         Ok(None)
     }
 }
@@ -151,6 +230,117 @@ impl PiecewiseSegment {
 impl From<PiecewiseSegment> for Content {
     fn from(piecewise_segment: PiecewiseSegment) -> Self {
         Content::PiecewiseSegment(piecewise_segment)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Circle {
+    pub center: Pos2,
+    pub radius: f32,
+    pub fill_color: Option<Color32>,
+    pub stroke: Option<Stroke>,
+    pub label: Option<String>,
+    pub responsable: bool,
+}
+
+impl Circle {
+    pub fn new() -> Self {
+        Self {
+            ..Default::default()
+        }
+    }
+
+    pub fn with_center(mut self, center: Pos2) -> Self {
+        self.center = center;
+        self
+    }
+
+    pub fn with_radius(mut self, radius: f32) -> Self {
+        self.radius = radius;
+        self
+    }
+
+    pub fn with_fill_color(mut self, fill_color: Color32) -> Self {
+        self.fill_color = Some(fill_color);
+        self
+    }
+
+    pub fn with_stroke_color(mut self, stroke_color: Color32) -> Self {
+        if let Some(stroke) = &mut self.stroke {
+            stroke.color = stroke_color;
+        } else {
+            self.stroke = Some(Stroke::new(1.0, stroke_color));
+        }
+        self
+    }
+
+    pub fn with_stroke_thickness(mut self, stroke_thickness: f32) -> Self {
+        if let Some(stroke) = &mut self.stroke {
+            stroke.width = stroke_thickness;
+        } else {
+            self.stroke = Some(Stroke::new(stroke_thickness, Color32::BLACK));
+        }
+        self
+    }
+
+    pub fn with_filled(mut self, fill: Color32) -> Self {
+        self.fill_color = Some(fill);
+
+        self
+    }
+
+    pub fn with_label(mut self, label: impl ToString) -> Self {
+        self.label = Some(label.to_string());
+        self
+    }
+
+    pub fn show(
+        &self,
+        _ui: &mut Ui,
+        painter: &mut Painter,
+        canvas_state: &VisCanvasStateInner,
+    ) -> Result<Option<Response>> {
+        let center = painter.clip_rect().min
+            + (self.center.to_vec2() * canvas_state.current_scale_vec() + canvas_state.shift);
+        let radius = self.radius * canvas_state.current_scale;
+
+        painter.circle(
+            center,
+            radius,
+            self.fill_color.unwrap_or_default(),
+            if let Some(stroke) = &self.stroke {
+                *stroke
+            } else {
+                Stroke::new(0.0, Color32::BLACK)
+            },
+        );
+        if let Some(label) = &self.label {
+            let text_rect = painter.text(
+                center,
+                Align2::CENTER_CENTER,
+                label.as_str(),
+                FontId::default(),
+                Color32::BLACK,
+            );
+            if let Some(fill_color) = self.fill_color {
+                painter.rect_filled(text_rect, 0.0, fill_color);
+            }
+            let _text_rect = painter.text(
+                center,
+                Align2::CENTER_CENTER,
+                label.as_str(),
+                FontId::default(),
+                Color32::BLACK,
+            );
+        }
+
+        Ok(None)
+    }
+}
+
+impl From<Circle> for Content {
+    fn from(circle: Circle) -> Self {
+        Content::Circle(circle)
     }
 }
 
@@ -402,6 +592,9 @@ impl VisCanvasState {
                         }
                         Content::PiecewiseSegment(piecewise_segment) => {
                             piecewise_segment.show(ui, &mut painter, &self.inner_state)?;
+                        }
+                        Content::Circle(circle) => {
+                            circle.show(ui, &mut painter, &self.inner_state)?;
                         }
                     }
                 }
