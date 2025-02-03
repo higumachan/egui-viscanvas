@@ -113,11 +113,44 @@ fn main() {
                     ];
 
                     egui::CentralPanel::default().show(ctx, |ui| {
-                        vis_canvas(ui, Id::new("canvas"), &contents).unwrap();
+                        vis_canvas(ui, Id::new("canvas"), Origin::TopLeft, &contents).unwrap();
                     });
                 },
             )
                 .add_asset_file("./assets/logo.png".into()),
+        )
+        .add_story(
+            Story::new(
+                "vertical_scroll_only_canvas",
+                story_body! {
+                    use egui::{Id, ImageSource};
+                    use egui_viscanvas::*;
+
+                    let contents: Vec<Content> = vec![
+                        Rectangle::new()
+                            .with_position(egui::Pos2::new(0.0, 0.0))
+                            .with_size(egui::Vec2::new(100.0, 100.0))
+                            .with_stroke_color(egui::Color32::from_rgb(255, 0, 0))
+                            .with_stroke_thickness(2.0)
+                            .with_label("Top").into(),
+                        Rectangle::new()
+                            .with_position(egui::Pos2::new(0.0, 400.0))
+                            .with_size(egui::Vec2::new(100.0, 100.0))
+                            .with_stroke_color(egui::Color32::from_rgb(0, 255, 0))
+                            .with_stroke_thickness(2.0)
+                            .with_label("Bottom").into(),
+                    ];
+
+                    let scroll_config = ScrollConfig {
+                        enable_horizontal: false,
+                        enable_vertical: true,
+                    };
+
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        vis_canvas_with_scroll_config(ui, Id::new("canvas"), Origin::TopLeft, scroll_config, &contents).unwrap();
+                    });
+                },
+            ),
         )
         .build();
 
