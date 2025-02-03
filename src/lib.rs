@@ -19,6 +19,21 @@ pub enum Origin {
     BottomLeft,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ScrollConfig {
+    pub enable_horizontal: bool,
+    pub enable_vertical: bool,
+}
+
+impl Default for ScrollConfig {
+    fn default() -> Self {
+        Self {
+            enable_horizontal: true,
+            enable_vertical: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Thickness {
     /// Relative to the canvas scale
@@ -526,6 +541,20 @@ pub fn vis_canvas(
     Ok((response, state))
 }
 
+pub fn vis_canvas_with_scroll_config(
+    ui: &mut Ui,
+    id: Id,
+    origin: Origin,
+    scroll_config: ScrollConfig,
+    contents: &[Content],
+) -> Result<(Response, VisCanvasState)> {
+    let mut state = VisCanvasState::load(ui.ctx(), id, origin);
+    state.inner_state.scroll_config = scroll_config;
+    let response = state.show_body(ui, contents)?;
+    state.store(ui.ctx());
+    Ok((response, state))
+}
+
 pub struct VisCanvasState {
     pub id: Id,
     inner_state: VisCanvasStateInner,
@@ -536,6 +565,7 @@ pub struct VisCanvasStateInner {
     origin: Origin,
     current_scale: f32,
     shift: Vec2,
+    scroll_config: ScrollConfig,
 }
 
 impl Default for VisCanvasStateInner {
@@ -544,6 +574,7 @@ impl Default for VisCanvasStateInner {
             current_scale: 1.0,
             shift: Vec2::ZERO,
             origin: Origin::TopLeft,
+            scroll_config: ScrollConfig::default(),
         }
     }
 }
@@ -614,7 +645,14 @@ impl VisCanvasState {
                 {
                     let dy = input.raw_scroll_delta.y;
                     let dx = input.raw_scroll_delta.x;
-                    state.shift += egui::vec2(dx, dy) * SCROLL_SPEED;
+                    let mut scroll_delta = Vec2::ZERO;
+                    if state.scroll_config.enable_horizontal {
+                        scroll_delta.x = dx;
+                    }
+                    if state.scroll_config.enable_vertical {
+                        scroll_delta.y = dy;
+                    }
+                    state.shift += scroll_delta * SCROLL_SPEED;
                 }
                 // ズーム関係
                 {
