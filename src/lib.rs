@@ -4,8 +4,8 @@ use crate::error::{Result, VisCanvasError};
 use egui::epaint::PathShape;
 use egui::load::TexturePoll;
 use egui::{
-    Align2, Color32, Context, Id, ImageSource, Painter, PointerButton, Pos2, Rect, Response,
-    Rounding, Sense, SizeHint, Stroke, TextureOptions, Ui, Vec2,
+    Align2, Color32, Context, CornerRadius, Id, ImageSource, Painter, PointerButton, Pos2, Rect,
+    Response, Sense, SizeHint, Stroke, StrokeKind, TextureOptions, Ui, Vec2,
 };
 use egui::{FontId, Shape};
 use num::Zero;
@@ -430,10 +430,10 @@ impl Arc {
     ) -> Result<Option<Response>> {
         // 円弧を直線の集合として描画
         const SEGMENTS: usize = 128;
-        
+
         // 角度の範囲を計算
         let angle_range = self.end_angle - self.start_angle;
-        
+
         // 点の配列を生成
         let mut points = Vec::with_capacity(SEGMENTS + 1);
         for i in 0..=SEGMENTS {
@@ -442,14 +442,14 @@ impl Arc {
             let y = self.center.y + self.radius * angle.sin();
             points.push(Pos2::new(x, y));
         }
-        
+
         // 点を使って線分を描画
         for i in 0..points.len() - 1 {
             let start = painter.clip_rect().min
                 + (points[i].to_vec2() * canvas_state.current_scale_vec() + canvas_state.shift);
             let end = painter.clip_rect().min
                 + (points[i + 1].to_vec2() * canvas_state.current_scale_vec() + canvas_state.shift);
-            
+
             painter.line_segment(
                 [start, end],
                 if let Some(stroke) = &self.stroke {
@@ -459,12 +459,12 @@ impl Arc {
                 },
             );
         }
-        
+
         // ラベルの描画
         if let Some(label) = &self.label {
             let center_screen = painter.clip_rect().min
                 + (self.center.to_vec2() * canvas_state.current_scale_vec() + canvas_state.shift);
-            
+
             let _text_rect = painter.text(
                 center_screen,
                 Align2::CENTER_CENTER,
@@ -472,7 +472,7 @@ impl Arc {
                 FontId::default(),
                 Color32::BLACK,
             );
-            
+
             let _text_rect = painter.text(
                 center_screen,
                 Align2::CENTER_CENTER,
@@ -481,7 +481,7 @@ impl Arc {
                 Color32::BLACK,
             );
         }
-        
+
         // 応答可能な場合はレスポンスを返す
         if self.responsable {
             // 円弧の境界ボックスを計算
@@ -489,14 +489,16 @@ impl Arc {
             let min_y = self.center.y - self.radius;
             let max_x = self.center.x + self.radius;
             let max_y = self.center.y + self.radius;
-            
+
             let rect = Rect::from_two_pos(
                 painter.clip_rect().min
-                    + (Vec2::new(min_x, min_y) * canvas_state.current_scale_vec() + canvas_state.shift),
+                    + (Vec2::new(min_x, min_y) * canvas_state.current_scale_vec()
+                        + canvas_state.shift),
                 painter.clip_rect().min
-                    + (Vec2::new(max_x, max_y) * canvas_state.current_scale_vec() + canvas_state.shift),
+                    + (Vec2::new(max_x, max_y) * canvas_state.current_scale_vec()
+                        + canvas_state.shift),
             );
-            
+
             Ok(Some(ui.allocate_rect(rect, Sense::click())))
         } else {
             Ok(None)
@@ -598,13 +600,14 @@ impl Rectangle {
 
         painter.rect(
             rect,
-            Rounding::default(),
+            CornerRadius::default(),
             self.fill_color.unwrap_or_default(),
             if let Some(stroke) = &self.stroke {
                 *stroke
             } else {
                 Stroke::new(0.0, Color32::BLACK)
             },
+            StrokeKind::Middle,
         );
         if let Some(label) = &self.label {
             let text_rect = painter.text(
@@ -739,6 +742,13 @@ impl VisCanvasState {
         assert_ne!(self.inner_state.current_scale, f32::zero());
         ((screen_pos - self.inner_state.shift).to_vec2() / self.inner_state.current_scale_vec())
             .to_pos2()
+    }
+
+    pub fn set_zoom(&mut self, ctx: &Context, zoom: f32) {
+        self.inner_state.current_scale = zoom;
+        ctx.data_mut(|data| {
+            data.insert_persisted(self.id, self.inner_state.clone());
+        });
     }
 
     pub(crate) fn load(ctx: &Context, id: Id, origin: Origin) -> Self {
