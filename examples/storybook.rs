@@ -152,6 +152,38 @@ fn main() {
                 },
             ),
         )
+        .add_story(
+            Story::new(
+                "arc_canvas",
+                story_body! {
+                    use egui::{Id, ImageSource};
+                    use egui_viscanvas::*;
+                    use std::f32::consts::PI;
+
+                    let contents: Vec<Content> = vec![
+                        Arc::new()
+                            .with_center(egui::Pos2::new(100.0, 100.0))
+                            .with_radius(50.0)
+                            .with_angles(0.0, PI)  // 半円
+                            .with_stroke_color(egui::Color32::from_rgb(255, 0, 0))
+                            .with_stroke_thickness(2.0)
+                            .with_label("hannenn")
+                            .into(),
+                        Arc::new()
+                            .with_center(egui::Pos2::new(200.0, 200.0))
+                            .with_radius(70.0)
+                            .with_angles(PI / 4.0, PI * 3.0 / 4.0)  // 45度から135度
+                            .with_stroke_color(egui::Color32::from_rgb(0, 0, 255))
+                            .with_stroke_thickness(3.0)
+                            .into(),
+                    ];
+
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        vis_canvas(ui, Id::new("canvas"), Origin::TopLeft, &contents).unwrap();
+                    });
+                },
+            ),
+        )
         .build();
 
     run_story_book("egui-viscanvas", story_book, NativeOptions::default()).unwrap();
