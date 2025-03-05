@@ -1,2 +1,6 @@
 /target
 Cargo.lock
+
+# egui_kittestのスナップショットテスト関連
+**/tests/snapshots/**/*.diff.png
+**/tests/snapshots/**/*.new.png

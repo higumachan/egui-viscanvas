@@ -1,0 +1,82 @@
+---
+description: `\` stated shortcut commands
+globs: 
+alwaysApply: true
+---
+# \tf
+
+テストを最初に実行してから作業を始める。
+最後にもテストを実行して動作を確認する。
+
+# \td
+
+現在のコンテキストで実行するべき粒度でテストを実行する。
+
+## プロジェクト全体のテストを実行する場合
+
+```
+cargo test --workspace
+```
+
+## 特定のクレートのテストを実行する場合
+
+```
+cargo test -p <crate_name>
+```
+
+## 特定のテストを実行する場合
+
+```
+cargo test -p <crate_name> <test_name>
+```
+
+
+# \c
+
+```
+cargo check --workspace
+```
+
+を実行して、コンパイルエラーがないことを確認する。
+コンパイルエラーがある場合は修正を行う。
+
+
+# \gc
+
+git commit を実行する。
+
+## 手順
+1. 今回の作業の内容を1行の文でまとめる(これがコミットメッセージの元になります)
+2. git status で変更されたファイルを確認する
+3. git add で今回編集した変更されたファイルをステージングする
+4. git commit でコミットする
+
+## コミットルール
+
+gitmojiに準拠するようにしてください。
+
+例
+```
+:sparkles: 新しい機能の追加
+:bug: バグを修正
+:recycle: リファクタリング
+:speech_balloon: ログの追加
+:rotating_light: fix clippy
+```
+
+# \clip
+
+```
+cargo clippy --workspace --all-targets --all-features
+```
+
+を実行してすべてのクレートに対してclippyを実行する。
+clippyの実行した結果に従って修正を行う。
+
+1. クレートのルートディレクトリに移動する
+2. `cargo clippy --workspace` を実行する
+3. clippyの警告に従って1つずつ修正を行う
+    - 1つの警告の修正を行う
+    - `cargo clippy --workspace` を実行する
+    - 対象の警告が修正されていれば次の警告へ進む
+    

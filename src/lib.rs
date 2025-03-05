@@ -4,8 +4,8 @@ use crate::error::{Result, VisCanvasError};
 use egui::epaint::PathShape;
 use egui::load::TexturePoll;
 use egui::{
-    Align2, Color32, Context, Id, ImageSource, Painter, PointerButton, Pos2, Rect, Response,
-    Rounding, Sense, SizeHint, Stroke, TextureOptions, Ui, Vec2,
+    Align2, Color32, Context, CornerRadius, Id, ImageSource, Painter, PointerButton, Pos2, Rect,
+    Response, Sense, SizeHint, Stroke, StrokeKind, TextureOptions, Ui, Vec2,
 };
 use egui::{FontId, Shape};
 use num::Zero;
@@ -49,6 +49,7 @@ pub enum Content {
     Circle(Circle),
     Segment(Segment),
     PiecewiseSegment(PiecewiseSegment),
+    Arc(Arc),
 }
 
 impl From<Rectangle> for Content {
@@ -360,6 +361,158 @@ impl From<Circle> for Content {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct Arc {
+    pub center: Pos2,
+    pub radius: f32,
+    pub start_angle: f32,
+    pub end_angle: f32,
+    pub stroke: Option<Stroke>,
+    pub label: Option<String>,
+    pub responsable: bool,
+}
+
+impl Arc {
+    pub fn new() -> Self {
+        Self {
+            ..Default::default()
+        }
+    }
+
+    pub fn with_center(mut self, center: Pos2) -> Self {
+        self.center = center;
+        self
+    }
+
+    pub fn with_radius(mut self, radius: f32) -> Self {
+        self.radius = radius;
+        self
+    }
+
+    pub fn with_angles(mut self, start_angle: f32, end_angle: f32) -> Self {
+        self.start_angle = start_angle;
+        self.end_angle = end_angle;
+        self
+    }
+
+    pub fn with_stroke_color(mut self, stroke_color: Color32) -> Self {
+        if let Some(stroke) = &mut self.stroke {
+            stroke.color = stroke_color;
+        } else {
+            self.stroke = Some(Stroke::new(1.0, stroke_color));
+        }
+        self
+    }
+
+    pub fn with_stroke_thickness(mut self, stroke_thickness: f32) -> Self {
+        if let Some(stroke) = &mut self.stroke {
+            stroke.width = stroke_thickness;
+        } else {
+            self.stroke = Some(Stroke::new(stroke_thickness, Color32::BLACK));
+        }
+        self
+    }
+
+    pub fn with_label(mut self, label: impl ToString) -> Self {
+        self.label = Some(label.to_string());
+        self
+    }
+
+    pub fn with_responsable(mut self, responsable: bool) -> Self {
+        self.responsable = responsable;
+        self
+    }
+
+    pub fn show(
+        &self,
+        ui: &mut Ui,
+        painter: &mut Painter,
+        canvas_state: &VisCanvasStateInner,
+    ) -> Result<Option<Response>> {
+        // 円弧を直線の集合として描画
+        const SEGMENTS: usize = 128;
+
+        // 角度の範囲を計算
+        let angle_range = self.end_angle - self.start_angle;
+
+        // 点の配列を生成
+        let mut points = Vec::with_capacity(SEGMENTS + 1);
+        for i in 0..=SEGMENTS {
+            let angle = self.start_angle + angle_range * (i as f32 / SEGMENTS as f32);
+            let x = self.center.x + self.radius * angle.cos();
+            let y = self.center.y + self.radius * angle.sin();
+            points.push(Pos2::new(x, y));
+        }
+
+        // 点を使って線分を描画
+        for i in 0..points.len() - 1 {
+            let start = painter.clip_rect().min
+                + (points[i].to_vec2() * canvas_state.current_scale_vec() + canvas_state.shift);
+            let end = painter.clip_rect().min
+                + (points[i + 1].to_vec2() * canvas_state.current_scale_vec() + canvas_state.shift);
+
+            painter.line_segment(
+                [start, end],
+                if let Some(stroke) = &self.stroke {
+                    *stroke
+                } else {
+                    Stroke::new(1.0, Color32::BLACK)
+                },
+            );
+        }
+
+        // ラベルの描画
+        if let Some(label) = &self.label {
+            let center_screen = painter.clip_rect().min
+                + (self.center.to_vec2() * canvas_state.current_scale_vec() + canvas_state.shift);
+
+            let _text_rect = painter.text(
+                center_screen,
+                Align2::CENTER_CENTER,
+                label.as_str(),
+                FontId::default(),
+                Color32::BLACK,
+            );
+
+            let _text_rect = painter.text(
+                center_screen,
+                Align2::CENTER_CENTER,
+                label.as_str(),
+                FontId::default(),
+                Color32::BLACK,
+            );
+        }
+
+        // 応答可能な場合はレスポンスを返す
+        if self.responsable {
+            // 円弧の境界ボックスを計算
+            let min_x = self.center.x - self.radius;
+            let min_y = self.center.y - self.radius;
+            let max_x = self.center.x + self.radius;
+            let max_y = self.center.y + self.radius;
+
+            let rect = Rect::from_two_pos(
+                painter.clip_rect().min
+                    + (Vec2::new(min_x, min_y) * canvas_state.current_scale_vec()
+                        + canvas_state.shift),
+                painter.clip_rect().min
+                    + (Vec2::new(max_x, max_y) * canvas_state.current_scale_vec()
+                        + canvas_state.shift),
+            );
+
+            Ok(Some(ui.allocate_rect(rect, Sense::click())))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+impl From<Arc> for Content {
+    fn from(arc: Arc) -> Self {
+        Content::Arc(arc)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct Rectangle {
     pub x: f32,
     pub y: f32,
@@ -447,13 +600,14 @@ impl Rectangle {
 
         painter.rect(
             rect,
-            Rounding::default(),
+            CornerRadius::default(),
             self.fill_color.unwrap_or_default(),
             if let Some(stroke) = &self.stroke {
                 *stroke
             } else {
                 Stroke::new(0.0, Color32::BLACK)
             },
+            StrokeKind::Middle,
         );
         if let Some(label) = &self.label {
             let text_rect = painter.text(
@@ -507,7 +661,11 @@ impl Image {
     ) -> Result<Option<Response>> {
         let texture = self.image_source.clone().load(
             ui.ctx(),
-            TextureOptions::default(),
+            TextureOptions {
+                magnification: egui::TextureFilter::Linear,
+                minification: egui::TextureFilter::Linear,
+                ..Default::default()
+            },
             SizeHint::Scale(1.0.into()),
         )?;
 
@@ -586,6 +744,13 @@ impl VisCanvasState {
             .to_pos2()
     }
 
+    pub fn set_zoom(&mut self, ctx: &Context, zoom: f32) {
+        self.inner_state.current_scale = zoom;
+        ctx.data_mut(|data| {
+            data.insert_persisted(self.id, self.inner_state.clone());
+        });
+    }
+
     pub(crate) fn load(ctx: &Context, id: Id, origin: Origin) -> Self {
         let inner_state = ctx.data_mut(|data| {
             let mut inner = data
@@ -626,6 +791,9 @@ impl VisCanvasState {
                         }
                         Content::Circle(circle) => {
                             circle.show(ui, &mut painter, &self.inner_state)?;
+                        }
+                        Content::Arc(arc) => {
+                            arc.show(ui, &mut painter, &self.inner_state)?;
                         }
                     }
                 }
